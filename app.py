@@ -42,7 +42,7 @@ st.markdown("""
         <h4>💡 Örnek Sorular</h4>
         <ul>
             <li>• 11-A sınıfı Çarşamba 4. saatte dersi nerede işleyecek?</li>
-            <li>• 11-B sınıfı Cuma günü hangi dersi var?</li>
+            <li>• 9-D sınıfı Cuma günü hangi dersleri var?</li>
             <li>• 9-E sınıfı Salı 2. saatte hangi öğretmenin dersi var?</li>
         </ul>
     </div>

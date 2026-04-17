@@ -1,116 +1,128 @@
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 import streamlit as st
 import pandas as pd
 import datetime
 import re
+import os
 from langchain_groq import ChatGroq
 
 # --- SAYFA YAPISI ---
-st.set_page_config(page_title="Okul Ders Programı", page_icon="📅", layout="wide")
+st.set_page_config(page_title="Okul Akıllı Asistanı", page_icon="🏫", layout="wide")
 
-# --- GÖRSEL TASARIM (CSS) ---
+# --- GELİŞMİŞ GÖRSEL TASARIM (CSS) ---
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    .stTitle { color: white; text-align: center; font-size: 2.5rem !important; margin-bottom: 20px; }
+    .main { background: linear-gradient(135deg, #0e1117 0%, #161b22 100%); }
+    .main-title {
+        background: linear-gradient(90deg, #00dbde 0%, #fc00ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        font-size: 3.5rem !important;
+        font-weight: 800;
+        margin-bottom: 10px;
+    }
+    .card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 25px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: transform 0.3s ease, border 0.3s ease;
+        height: 320px; /* Yeni sorular için biraz uzatıldı */
+    }
+    .card:hover {
+        transform: translateY(-10px);
+        border: 1px solid rgba(0, 219, 222, 0.5);
+    }
+    .card-1 { border-left: 8px solid #00dbde; }
+    .card-2 { border-left: 8px solid #fc00ff; }
+    .card h3 { color: #ffffff; font-size: 1.5rem; margin-bottom: 15px; }
+    .card ul { padding-left: 20px; color: #d1d5db; font-size: 0.9rem; }
+    .card li { margin-bottom: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("<h1 class='stTitle'>📅 Akıllı Ders Programı Asistanı</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-title'>🏫 Okul Arkadaşım AI</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; color:#888;'>Yapay Zeka Destekli Ders ve Mevzuat Rehberi</p>", unsafe_allow_html=True)
 
-# --- SECRETS & LLM YAPILANDIRMASI ---
+# --- SECRETS & LLM ---
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Lütfen Streamlit Secrets paneline GROQ_API_KEY ekleyin.")
+    st.error("GROQ_API_KEY bulunamadı!")
     st.stop()
 
-# Colab'daki sıcaklık ve model ayarlarıyla birebir aynı
-llm = ChatGroq(
-    model_name="llama-3.1-8b-instant", 
-    temperature=0, 
-    api_key=st.secrets["GROQ_API_KEY"]
-)
+llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0, api_key=st.secrets["GROQ_API_KEY"])
 
 # --- VERİ YÜKLEME ---
 @st.cache_data
 def load_data():
     try:
-        # Colab'daki CSV okuma mantığı: Ayırıcı ';'
         return pd.read_csv('SinifProgrami1404.csv', sep=';')
-    except FileNotFoundError:
-        st.error("Hata: 'SinifProgrami1404.csv' dosyası bulunamadı!")
+    except:
         return None
 
 df = load_data()
 
-# --- ASİSTAN MANTIĞI (COLAB İLE %100 UYUMLU) ---
-def ogrenci_asistani_kesin_cozum(soru):
-    # Gün hesaplama mantığı
+# --- VİTRİN KARTLARI (YENİ SORULAR EKLENDİ) ---
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""<div class="card card-1"><h3>📅 Ders Programı Örnekleri</h3>
+    <ul>
+        <li>• 11-A sınıfı Çarşamba 4. saatte dersi nerede işleyecek?</li>
+        <li>• 11-B sınıfı Cuma günü hangi dersi var?</li>
+        <li>• 9-E sınıfı Salı 2. saatte hangi öğretmenin dersi var?</li>
+    </ul></div>""", unsafe_allow_html=True)
+
+with col2:
+    st.markdown("""<div class="card card-2"><h3>⚖️ Mevzuat Rehberi Örnekleri</h3>
+    <ul>
+        <li>• 8 gün devamsızlık belge almama engel mi?</li>
+        <li>• Yıl sonu ortalamam 52, sınıfı geçebilir miyim?</li>
+        <li>• Sorumluluk sınavından kaç alırsam geçerim?</li>
+    </ul></div>""", unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# --- ASİSTAN FONKSİYONU (COLAB MANTIĞI) ---
+def asistan_sorgula(soru):
     gunler_tr = {0: "Pazartesi", 1: "Salı", 2: "Çarşamba", 3: "Perşembe", 4: "Cuma", 5: "Cumartesi", 6: "Pazar"}
     bugun_adi = gunler_tr[datetime.datetime.now().weekday()]
     yarin_adi = gunler_tr[(datetime.datetime.now().weekday() + 1) % 7]
 
-    # NLU: Sorudan veri ayıklama
-    nlu_prompt = f"""
-    Soru: "{soru}"
-    Bugün: {bugun_adi}, Yarın: {yarin_adi}
-    Bu sorudaki SINIF, GUN ve SAAT bilgilerini sadece şu formatta yaz: SINIF:[...], GUN:[...], SAAT:[...]
-    """
+    nlu_prompt = f"Soru: '{soru}' Bugün: {bugun_adi}, Yarın: {yarin_adi}. Bilgileri SINIF:[...], GUN:[...], SAAT:[...] formatında çek."
 
     try:
         cikti = llm.invoke(nlu_prompt).content
-        
-        # COLAB'DAKİ %100 ÇALIŞAN REGEX DESENLERİ (GÜNCELLENDİ)
-        # Sınıf, gün ve saati parantez olsa da olmasa da yakalar
         h_sinif = re.search(r"SINIF:\[?(.*?)\]?,", cikti).group(1).replace("-", "").strip()
         h_gun = re.search(r"GUN:\[?(.*?)\]?,", cikti).group(1).strip()
         h_saat = re.search(r"SAAT:\[?(.*?)\]?$", cikti).group(1).strip()
 
-        # Pandas Filtreleme (Maske)
-        # Sınıf ismindeki "-" işaretlerini kaldırarak eşleştirme yapar (10-A ve 10A aynı sayılır)
         mask = (df['Sinif'].str.replace("-", "").str.contains(h_sinif, case=False, na=False)) & \
                (df['Gun'].str.contains(h_gun, case=False, na=False))
-
-        if h_saat.isdigit():
-            mask = mask & (df['Girilen Ders Saati'] == int(h_saat))
-
-        sonuc_df = df[mask]
+        if h_saat.isdigit(): mask = mask & (df['Girilen Ders Saati'] == int(h_saat))
         
-        # Sonuç bağlamı oluşturma
-        context = sonuc_df.to_string(index=False) if not sonuc_df.empty else "Kayıt bulunamadı."
+        sonuc = df[mask].to_string(index=False) if not df[mask].empty else "Kayıt bulunamadı."
         
-    except Exception:
-        return "Üzgünüm, sınıfını veya hangi günü sorduğunu tam anlayamadım. (Örn: 10A Pazartesi 3. saat ne var?)"
+        final_msg = f"Tablo verisine göre öğrenciye kısa ve net cevap ver. VERİ: {sonuc}\nSORU: {soru}"
+        return llm.invoke(final_msg).content
+    except:
+        return "Üzgünüm, sorunu tam anlayamadım. Lütfen sınıf ve zaman belirterek tekrar sorabilir misin? 😊"
 
-    # Final Yanıt Oluşturma
-    final_prompt = f"""
-    Sen bir okul asistanısın. Aşağıdaki tablo verisini kullanarak öğrenciye net, samimi ve kısa bir cevap ver.
-    Veride olmayan bilgiyi uydurma.
-    
-    TABLO VERİSİ:
-    {context}
-    
-    ÖĞRENCİ SORUSU: 
-    {soru}
-    """
-    return llm.invoke(final_prompt).content
+# --- SOHBET ALANI ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# --- SOHBET AKIŞI ---
-if df is not None:
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    # Eski mesajları ekrana bas
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    # Yeni soru girişi
-    if prompt := st.chat_input("Ders programını sor (Örn: 9A bugün 3. saat ne?)"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Program kontrol ediliyor..."):
-                response = ogrenci_asistani_kesin_cozum(prompt)
-                st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+if prompt := st.chat_input("Neyi merak ediyorsun?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"): st.markdown(prompt)
+    with st.chat_message("assistant"):
+        response = asistan_sorgula(prompt)
+        st.markdown(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})

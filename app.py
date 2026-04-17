@@ -124,7 +124,7 @@ if df is not None:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Ders programını sor (Örn: 9A bugün 3. saat ne?)"):
+    if prompt := st.chat_input("Ders programını sor. (Örn: 9-A sınıfının bugün 3. saat hangi dersi var?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)

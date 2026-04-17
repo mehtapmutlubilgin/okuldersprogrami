@@ -12,13 +12,6 @@ st.markdown("""
     <style>
     .main { background-color: #0e1117; }
     .stTitle { color: white; text-align: center; font-size: 2.5rem !important; margin-bottom: 20px; }
-    .card {
-        background-color: #1a1c24;
-        border-radius: 15px;
-        padding: 15px;
-        border-top: 5px solid #0083ff;
-        margin-bottom: 10px;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -39,8 +32,8 @@ llm = ChatGroq(
 # --- VERİ YÜKLEME ---
 @st.cache_data
 def load_data():
-    # Colab'daki CSV okuma mantığı: Ayırıcı ';'
     try:
+        # Colab'daki CSV okuma mantığı: Ayırıcı ';'
         return pd.read_csv('SinifProgrami1404.csv', sep=';')
     except FileNotFoundError:
         st.error("Hata: 'SinifProgrami1404.csv' dosyası bulunamadı!")
@@ -48,7 +41,7 @@ def load_data():
 
 df = load_data()
 
-# --- ASİSTAN MANTIĞI (COLAB İLE BİREBİR) ---
+# --- ASİSTAN MANTIĞI (COLAB İLE %100 UYUMLU) ---
 def ogrenci_asistani_kesin_cozum(soru):
     # Gün hesaplama mantığı
     gunler_tr = {0: "Pazartesi", 1: "Salı", 2: "Çarşamba", 3: "Perşembe", 4: "Cuma", 5: "Cumartesi", 6: "Pazar"}
@@ -65,12 +58,14 @@ def ogrenci_asistani_kesin_cozum(soru):
     try:
         cikti = llm.invoke(nlu_prompt).content
         
-        # Düzenli ifadelerle veriyi ayıklama (Colab mantığı)
-        h_sinif = re.search(r"SINIF:\[?(.*?)\],", cikti).group(1).replace("-", "").strip()
-        h_gun = re.search(r"GUN:\[?(.*?)\],", cikti).group(1).strip()
-        h_saat = re.search(r"SAAT:\[?(.*?)$", cikti).group(1).replace("]", "").strip()
+        # COLAB'DAKİ %100 ÇALIŞAN REGEX DESENLERİ (GÜNCELLENDİ)
+        # Sınıf, gün ve saati parantez olsa da olmasa da yakalar
+        h_sinif = re.search(r"SINIF:\[?(.*?)\]?,", cikti).group(1).replace("-", "").strip()
+        h_gun = re.search(r"GUN:\[?(.*?)\]?,", cikti).group(1).strip()
+        h_saat = re.search(r"SAAT:\[?(.*?)\]?$", cikti).group(1).strip()
 
         # Pandas Filtreleme (Maske)
+        # Sınıf ismindeki "-" işaretlerini kaldırarak eşleştirme yapar (10-A ve 10A aynı sayılır)
         mask = (df['Sinif'].str.replace("-", "").str.contains(h_sinif, case=False, na=False)) & \
                (df['Gun'].str.contains(h_gun, case=False, na=False))
 
@@ -83,11 +78,11 @@ def ogrenci_asistani_kesin_cozum(soru):
         context = sonuc_df.to_string(index=False) if not sonuc_df.empty else "Kayıt bulunamadı."
         
     except Exception:
-        return "Üzgünüm, sınıfını veya hangi günü sorduğunu tam anlayamadım. (Örn: 10A yarın 2. saat ne var?)"
+        return "Üzgünüm, sınıfını veya hangi günü sorduğunu tam anlayamadım. (Örn: 10A Pazartesi 3. saat ne var?)"
 
-    # Final Yanıt Oluşturma (Colab mantığı)
+    # Final Yanıt Oluşturma
     final_prompt = f"""
-    Sen bir okul asistanısın. Aşağıdaki tablo verisini kullanarak öğrenciye net ve kısa bir cevap ver.
+    Sen bir okul asistanısın. Aşağıdaki tablo verisini kullanarak öğrenciye net, samimi ve kısa bir cevap ver.
     Veride olmayan bilgiyi uydurma.
     
     TABLO VERİSİ:
@@ -103,10 +98,12 @@ if df is not None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
+    # Eski mesajları ekrana bas
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+    # Yeni soru girişi
     if prompt := st.chat_input("Ders programını sor (Örn: 9A bugün 3. saat ne?)"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):

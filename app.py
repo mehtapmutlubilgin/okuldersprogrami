@@ -124,4 +124,13 @@ if df is not None:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Ders programını sor (Örn:
+    if prompt := st.chat_input("Ders programını sor (Örn: 9A bugün 3. saat ne?)"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Program kontrol ediliyor..."):
+                response = ogrenci_asistani_kesin_cozum(prompt)
+                st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
